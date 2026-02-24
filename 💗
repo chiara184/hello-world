@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Whack-a-Mole - Mini Gioco</title>
+  <style>
+    :root {
+      --primary: #2DE3AB;
+      --bg: #C0EFFC;
+      --panel: #FBC5F7;
+      --text: #FF21FF;
+      --accent: #00cec9;
+      --danger: #F61E57;
+    }
+
+    body {
+      font-family: great vibes, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: linear-gradient(120deg, #eef2ff, #f9fbff);
+      color: var(--text);
+      margin: 0;
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      padding: 24px;
+    }
+
+    .container {
+      width: min(480px, 92vw);
+      background: var(--panel);
+      border-radius: 16px; /*16px*/
+      box-shadow: 0 10px 30px rgba(0,0,0,.08);
+      padding: 20px 22px 26px; /*padding: 20px 22px 26px;non cambia il bordo intorno al cuore*/
+    }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 1.8rem; margin: 0;  /*aumenta grandezza titolo*/
+    }
+
+    .controls {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    button {
+      background: var(--primary);
+      color: white; border: none; border-radius: 10px;
+      padding: 10px 14px; cursor: pointer; font-weight: 600;
+      box-shadow: 0 4px 10px rgba(108,92,231,.25);
+      transition: transform .06s ease, opacity .2s ease, filter .2s ease;
+    }
+    button:hover { filter: brightness(1.05); }
+    button:active { transform: translateY(1px) scale(0.99); }
+    button.secondary { background: var(--accent); }
+    button.danger { background: var(--danger); }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 10px; margin: 12px 0 16px;
+    }
+    .card {
+      background: var(--bg); border-radius: 12px; padding: 10px 12px; text-align: center;
+    }
+    .label { font-size: 1rem; color: #636e72; }  /*aumenta grandezza tempo,punteggio e record*/
+    .value { font-size: 1.8rem; font-weight: 800; margin-top: 2px; } /*aumenta grandezza dei numeri*/
+
+    .grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 10px; aspect-ratio: 1 / 1; /* mantiene quadrato */
+      user-select: none;
+    }
+
+    .cell {
+      background: #ecf0f1; border-radius: 14px; position: relative; overflow: hidden;
+      display: grid; place-items: center; transition: background .2s ease;
+      container-type: size;
+    }
+    .cell.active { background: #e8f3ff; }
+
+    .mole {
+      display: inline-block;
+      font-size: min(80cqw, 80cqh);
+      line-height: 1;
+      background: none;
+      box-shadow: none;
+      border-radius: 0;
+      transform: translateY(10px);
+      animation: pop .15s ease-out forwards;
+    }
+    .footer{
+     display:flex;
+     justify-content:space-between;
+     align-item:center;
+     margin-top: 20px;  /*fatto io-crea lo spazio tra puoi usare tab e versione*/
+    }
+    .emoji{
+     font-size: 1.6rem;
+     margin-right:6px;
+    } /*fatto io-aumenta grandezza solo emoji tempo,punteggio,record*/
+    @keyframes pop {
+      from { transform: translateY(10px) scale(.92); opacity: .4; }
+      to   { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .msg { text-align: center; margin-top: 14px; min-height: 24px; color: #636e72; }
+    .footer {
+      margin-top: 14px; font-size: .85rem; color: #7f8c8d; text-align: center;
+    }
+
+    /* Accessibilità focus */
+    .cell:focus-visible, button:focus-visible {
+      outline: 3px solid #a29bfe; outline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" role="application" aria-label="Gioco Whack-a-Mole">
+    <header>
+      <h1><b>💗Catch the Heart💗<b></h1>
+      <div class="controls">
+        <button id="startBtn">¶ START</button>
+        <button id="stopBtn" class="danger" disabled>⁋ STOP</button>
+      </div>
+    </header>
+
+   <div class="stats" aria-live="polite">
+      <div class="card"><div class="label"><span class="emoji">⏱️</span>Tempo</div><div id="time" class="value">30</div></div>
+      <div class="card"><div class="label"><span class="emoji">💘</span>Punteggio</div><div id="score" class="value">0</div></div>
+      <div class="card"><div class="label"><span class="emoji">🥰</span> Record</div><div id="best" class="value">0</div></div>
+    </div>
+
+    <div id="grid" class="grid" aria-label="Campo di gioco 3 per 3"></div>
+
+    <div id="message" class="msg">Clicca “START” e prendi più cuori possibili</div>
+    <div class="footer">
+    <span class="footer-left">Puoi usare Tab + Invio.</span>
+    <span class="footer-right"><b>v1.0<b></span></div>
+  </div>
+
+  <script>
+    // --- Config ---
+    const GAME_SECONDS = 30;
+    const MIN_APPEAR_MS = 500;   // tempo minimo tra spostamenti
+    const MAX_APPEAR_MS = 900;   // tempo massimo tra spostamenti
+    const GRID_SIZE = 3;         // 3x3
+
+    // --- Stato ---
+    let score = 0;
+    let best = Number(localStorage.getItem("wam_best") || 0);
+    let timeLeft = GAME_SECONDS;
+    let running = false;
+    let moleIndex = -1;
+    let tickTimer = null;
+    let moveTimer = null;
+
+    // --- Elementi ---
+    const gridEl = document.getElementById("grid");
+    const timeEl = document.getElementById("time");
+    const scoreEl = document.getElementById("score");
+    const bestEl = document.getElementById("best");
+    const messageEl = document.getElementById("message");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn  = document.getElementById("stopBtn");
+
+    bestEl.textContent = best;
+
+    // --- Crea la griglia ---
+    const cells = [];
+    for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+      const cell = document.createElement("button");
+      cell.className = "cell";
+      cell.setAttribute("aria-label", "Cella " + (i + 1));
+      cell.addEventListener("click", () => onCellClick(i));
+      cell.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          onCellClick(i);
+        }
+      });
+      gridEl.appendChild(cell);
+      cells.push(cell);
+    }
+
+    // --- Funzioni di gioco ---
+    function startGame() {
+      if (running) return;
+      running = true;
+      score = 0;
+      timeLeft = GAME_SECONDS;
+      scoreEl.textContent = score;
+      timeEl.textContent = timeLeft;
+      messageEl.textContent = "Inizia! Prendi la talpa!";
+
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+
+      clearMole();
+      scheduleNextMove();
+      tickTimer = setInterval(() => {
+        timeLeft--;
+        timeEl.textContent = timeLeft;
+        if (timeLeft <= 0) endGame();
+      }, 1000);
+    }
+
+    function endGame() {
+      running = false;
+      clearInterval(tickTimer);
+      clearTimeout(moveTimer);
+      clearMole();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+
+      if (score > best) {
+        best = score;
+        localStorage.setItem("wam_best", String(best));
+        bestEl.textContent = best;
+        messageEl.textContent = `💝NEW RECORD: ${best}💝`;
+      } else {
+        messageEl.textContent = `Tempo scaduto! Punteggio: ${score}`;
+      }
+    }
+
+    function stopGame() {
+      if (!running) return;
+      messageEl.textContent = "Gioco interrotto.";
+      endGame();
+    }
+
+    function onCellClick(index) {
+      if (!running) return;
+      if (index === moleIndex) {
+        score++;
+        scoreEl.textContent = score;
+        // feedback visivo rapido
+        cells[index].animate([{ transform: "scale(1)" }, { transform: "scale(0.92)" }, { transform: "scale(1)" }], { duration: 120 });
+        // sposta subito la talpa altrove
+        clearTimeout(moveTimer);
+        moveMole();
+        scheduleNextMove();
+      }
+    }
+
+    function clearMole() {
+      if (moleIndex >= 0) {
+        cells[moleIndex].classList.remove("active");
+        cells[moleIndex].innerHTML = "";
+        moleIndex = -1;
+      }
+    }
+
+    function moveMole() {
+      clearMole();
+      const nextIndex = randomDifferentIndex(moleIndex, GRID_SIZE * GRID_SIZE);
+      const cell = cells[nextIndex];
+      const mole = document.createElement("div");
+      mole.className = "mole";
+      mole.title = "Talpa! Clicca!";
+      mole.textContent = "💗"; //rappresenta la talpa
+      cell.classList.add("active");
+      cell.innerHTML = "";
+      cell.appendChild(mole);
+      moleIndex = nextIndex;
+    }
+
+    function scheduleNextMove() {
+      const delay = randInt(MIN_APPEAR_MS, MAX_APPEAR_MS);
+      moveTimer = setTimeout(() => {
+        moveMole();
+        scheduleNextMove();
+      }, delay);
+    }
+
+    // --- Utility ---
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+    function randomDifferentIndex(current, total) {
+      let idx;
+      do { idx = Math.floor(Math.random() * total); } while (idx === current);
+      return idx;
+    }
+
+    // --- Eventi UI ---
+    startBtn.addEventListener("click", startGame);
+    stopBtn.addEventListener("click", stopGame);
+
+    // Accessibilità: invia il focus alla griglia all’avvio
+    startBtn.addEventListener("click", () => cells[0].focus());
+  </script>
+</body>
+</html>
